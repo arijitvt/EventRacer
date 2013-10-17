@@ -40,6 +40,12 @@
 
 #include <vector>
 #include <set>
+#include <typeinfo>
+#include <iostream>
+
+#include "DOMTimer.h"
+
+#include <cxxabi.h>
 
 using namespace std;
 
@@ -241,6 +247,7 @@ void ThreadTimers::sharedTimerFired()
 
 void ThreadTimers::sharedTimerFiredInternal()
 {
+	static bool flag = false;
     // Do a re-entrancy check.
     if (m_firingTimers)
         return;
@@ -249,10 +256,42 @@ void ThreadTimers::sharedTimerFiredInternal()
     double fireTime = monotonicallyIncreasingTime();
     double timeToQuit = fireTime + maxDurationOfFiringTimers;
 
+//    TimerBase *myTimer = m_timerHeap.first();
+//    if(myTimer != NULL) {
+//    	if(typeid(*myTimer) == typeid(DOMTimer)) {
+//		cout<<"My Instrumentation starts here "<<endl;
+//		if(!flag) {
+//			myTimer->m_nextFireTime = fireTime+5;
+//			m_firingTimers = false;
+//				
+//			m_timerHeap.reverse();
+//			m_timerHeap.removeLast();
+//			m_timerHeap.reverse();
+//			m_timerHeap.append(myTimer);
+//
+//			for(int i = 0 ; i < m_timerHeap.size () ; ++i) {
+//				m_timerHeap[i]->m_heapIndex = i;
+//			}
+//			updateSharedTimer();
+//			return;
+//		}
+//		
+//	}
+//    }
+
     while (!m_timerHeap.isEmpty() && m_timerHeap.first()->m_nextFireTime <= fireTime) {
         TimerBase* timer = m_timerHeap.first();
         timer->m_nextFireTime = 0;
         timer->heapDeleteMin();
+	
+	char* data= new char(100);
+	size_t size;
+	int status;
+	data = abi::__cxa_demangle(typeid(*timer).name(), NULL, &size,&status);
+	if(status == 0 )  {
+		cout<<"The timer type is  : "<<data<<endl;
+	}
+
 
         if (!m_eventActionsHB.isInstrumentationDisabled()) {
 			EventActionId newId = m_eventActionsHB.allocateEventActionId();
@@ -271,6 +310,7 @@ void ThreadTimers::sharedTimerFiredInternal()
         timer->setNextFireTime(interval ? fireTime + interval : 0, interval);
 
         // Once the timer has been fired, it may be deleted, so do nothing else with it after this point.
+	
         timer->fired();
 
         if (!m_eventActionsHB.isInstrumentationDisabled()) {
